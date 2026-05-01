@@ -1,51 +1,35 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   doc, collection, setDoc, deleteDoc,
   onSnapshot, serverTimestamp, query, orderBy,
 } from 'firebase/firestore'
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth'
-import { db, auth } from '../firebase'
+import { db } from '../firebase'
 
 // Firestore layout:
-//   users/{uid}                     — settings: { goalHours, fastStart }
-//   users/{uid}/sessions/{id}       — { start, end, goalHours, goalMet, durationMs, createdAt }
+//   users/{deviceId}                   — { goalHours, fastStart }
+//   users/{deviceId}/sessions/{id}     — { start, end, goalHours, goalMet, durationMs, createdAt }
+
+function getDeviceId() {
+  const key = 'fast-time-device-id'
+  let id = localStorage.getItem(key)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(key, id)
+  }
+  return id
+}
 
 export function useFastStore() {
-  const [uid, setUid] = useState(null)
-  const [authReady, setAuthReady] = useState(false)
-  const [authError, setAuthError] = useState(null)
+  const deviceId = useMemo(() => getDeviceId(), [])
 
   const [goalHours, setGoalHoursState] = useState(16)
   const [fastStart, setFastStart] = useState(null)
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Sign in anonymously once
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUid(user.uid)
-        setAuthReady(true)
-        setAuthError(null)
-      } else {
-        try {
-          await signInAnonymously(auth)
-        } catch (err) {
-          console.error('Anonymous sign-in failed:', err)
-          setAuthError(err.code === 'auth/configuration-not-found'
-            ? 'Anonymous Authentication is not enabled in Firebase. Go to Firebase Console → Authentication → Sign-in method → Anonymous → Enable.'
-            : err.message
-          )
-        }
-      }
-    })
-    return unsub
-  }, [])
-
   // Listen to settings doc
   useEffect(() => {
-    if (!uid) return
-    const ref = doc(db, 'users', uid)
+    const ref = doc(db, 'users', deviceId)
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         const data = snap.data()
@@ -55,44 +39,39 @@ export function useFastStore() {
       setLoading(false)
     })
     return unsub
-  }, [uid])
+  }, [deviceId])
 
   // Listen to sessions subcollection
   useEffect(() => {
-    if (!uid) return
     const q = query(
-      collection(db, 'users', uid, 'sessions'),
+      collection(db, 'users', deviceId, 'sessions'),
       orderBy('createdAt', 'desc'),
     )
     const unsub = onSnapshot(q, (snap) => {
       setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     })
     return unsub
-  }, [uid])
+  }, [deviceId])
 
   const setGoalHours = useCallback(async (hours) => {
-    if (!uid) return
-    await setDoc(doc(db, 'users', uid), { goalHours: hours }, { merge: true })
-  }, [uid])
+    await setDoc(doc(db, 'users', deviceId), { goalHours: hours }, { merge: true })
+  }, [deviceId])
 
   const startFast = useCallback(async () => {
-    if (!uid) return
     const start = new Date().toISOString()
-    await setDoc(doc(db, 'users', uid), { fastStart: start }, { merge: true })
-  }, [uid])
+    await setDoc(doc(db, 'users', deviceId), { fastStart: start }, { merge: true })
+  }, [deviceId])
 
   const stopFast = useCallback(async () => {
-    if (!uid || !fastStart) return
+    if (!fastStart) return
     const end = new Date().toISOString()
     const durationMs = new Date(end) - new Date(fastStart)
     const goalMs = goalHours * 3600 * 1000
-    const sessionId = `${fastStart}-${end}`.replace(/[:.]/g, '-')
+    const sessionId = crypto.randomUUID()
 
     await Promise.all([
-      // Clear active fast
-      setDoc(doc(db, 'users', uid), { fastStart: null }, { merge: true }),
-      // Save session
-      setDoc(doc(db, 'users', uid, 'sessions', sessionId), {
+      setDoc(doc(db, 'users', deviceId), { fastStart: null }, { merge: true }),
+      setDoc(doc(db, 'users', deviceId, 'sessions', sessionId), {
         start: fastStart,
         end,
         goalHours,
@@ -101,19 +80,17 @@ export function useFastStore() {
         createdAt: serverTimestamp(),
       }),
     ])
-  }, [uid, fastStart, goalHours])
+  }, [deviceId, fastStart, goalHours])
 
   const deleteSession = useCallback(async (id) => {
-    if (!uid) return
-    await deleteDoc(doc(db, 'users', uid, 'sessions', id))
-  }, [uid])
+    await deleteDoc(doc(db, 'users', deviceId, 'sessions', id))
+  }, [deviceId])
 
   return {
     goalHours,
     fastStart,
     sessions,
-    loading: !authReady || loading,
-    authError,
+    loading,
     setGoalHours,
     startFast,
     stopFast,

@@ -44,16 +44,6 @@ export default function App() {
 
   const stats = calcStats(store.sessions)
 
-  if (store.authError) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, padding: '0 24px', textAlign: 'center' }}>
-        <span style={{ fontSize: 36 }}>🔥</span>
-        <p style={{ color: 'var(--red)', fontSize: 15, fontWeight: 600 }}>Firebase setup required</p>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, maxWidth: 420, lineHeight: 1.6 }}>{store.authError}</p>
-      </div>
-    )
-  }
-
   if (store.loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
