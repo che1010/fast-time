@@ -6,6 +6,16 @@ import { Log } from './components/Log'
 import { Settings } from './components/Settings'
 import './App.css'
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 680)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 680)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
+
 function requestNotifPermission() {
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission()
@@ -24,14 +34,20 @@ const TABS = ['Timer', 'Calendar', 'Log']
 
 export default function App() {
   const store = useFastStore()
+  const isMobile = useIsMobile()
   const [tab, setTab] = useState('Timer')
+  const [settingsOpen, setSettingsOpen] = useState(true)
   const notifiedRef = useRef(false)
+
+  // Collapse settings by default on mobile
+  useEffect(() => {
+    setSettingsOpen(!isMobile)
+  }, [isMobile])
 
   useEffect(() => {
     requestNotifPermission()
   }, [])
 
-  // Reset notification flag when fast starts/stops
   useEffect(() => {
     notifiedRef.current = false
   }, [store.fastStart])
@@ -52,6 +68,36 @@ export default function App() {
       </div>
     )
   }
+
+  const settingsPanel = (
+    <div>
+      {/* Collapsible header */}
+      <button
+        style={layout.settingsToggle}
+        onClick={() => setSettingsOpen(o => !o)}
+        aria-expanded={settingsOpen}
+      >
+        <span style={layout.settingsToggleLabel}>Goal Settings</span>
+        <span style={layout.chevron(settingsOpen)}>›</span>
+      </button>
+
+      {/* Collapsible body */}
+      <div style={layout.settingsBody(settingsOpen)}>
+        <div style={{ paddingTop: 12 }}>
+          <Settings
+            goalHours={store.goalHours}
+            onSave={store.setGoalHours}
+            disabled={!!store.fastStart}
+          />
+          {store.fastStart && (
+            <div style={{ ...layout.startedNote, marginTop: 12 }}>
+              Fast started {formatTimeAgo(store.fastStart)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div style={layout.app}>
@@ -75,7 +121,7 @@ export default function App() {
       </header>
 
       {/* Stats bar */}
-      <div style={layout.statsBar}>
+      <div style={layout.statsBar(isMobile)}>
         <Stat label="Total fasts" value={stats.total} />
         <Stat label="Goals met" value={stats.goalsMet} />
         <Stat label="Best streak" value={`${stats.bestStreak}d`} />
@@ -83,32 +129,37 @@ export default function App() {
       </div>
 
       {/* Main content */}
-      <main style={layout.main}>
+      <main>
         {tab === 'Timer' && (
-          <div style={layout.timerLayout}>
-            <div style={layout.timerCard}>
-              <Timer
-                fastStart={store.fastStart}
-                goalHours={store.goalHours}
-                onStart={store.startFast}
-                onStop={store.stopFast}
-                onGoalReached={handleGoalReached}
-              />
+          isMobile ? (
+            // Mobile: settings above timer, single column
+            <div style={layout.mobileStack}>
+              {settingsPanel}
+              <div style={layout.timerCard}>
+                <Timer
+                  fastStart={store.fastStart}
+                  goalHours={store.goalHours}
+                  onStart={store.startFast}
+                  onStop={store.stopFast}
+                  onGoalReached={handleGoalReached}
+                />
+              </div>
             </div>
-            <div style={layout.sideCard}>
-              <SectionTitle>Goal Settings</SectionTitle>
-              <Settings
-                goalHours={store.goalHours}
-                onSave={store.setGoalHours}
-                disabled={!!store.fastStart}
-              />
-              {store.fastStart && (
-                <div style={layout.startedNote}>
-                  Fast started {formatTimeAgo(store.fastStart)}
-                </div>
-              )}
+          ) : (
+            // Desktop: timer left, settings right
+            <div style={layout.desktopGrid}>
+              <div style={layout.timerCard}>
+                <Timer
+                  fastStart={store.fastStart}
+                  goalHours={store.goalHours}
+                  onStart={store.startFast}
+                  onStop={store.stopFast}
+                  onGoalReached={handleGoalReached}
+                />
+              </div>
+              <div>{settingsPanel}</div>
             </div>
-          </div>
+          )
         )}
 
         {tab === 'Calendar' && (
@@ -156,7 +207,6 @@ function calcStats(sessions) {
   const goalsMet = sessions.filter(s => s.goalMet).length
   const totalMs = sessions.reduce((acc, s) => acc + s.durationMs, 0)
 
-  // Best streak: consecutive calendar days with at least one fast
   const days = [...new Set(sessions.map(s => s.start.slice(0, 10)))].sort()
   let best = 0, cur = 0, prev = null
   for (const d of days) {
@@ -191,7 +241,7 @@ const layout = {
   app: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 24,
+    gap: 20,
   },
   header: {
     display: 'flex',
@@ -235,20 +285,20 @@ const layout = {
     color: active ? '#fff' : 'var(--text-muted)',
     transition: 'background 0.15s, color 0.15s',
   }),
-  statsBar: {
+  statsBar: (isMobile) => ({
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 12,
-  },
+    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+    gap: 10,
+  }),
   stat: {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: 12,
-    padding: '14px 16px',
+    padding: '12px 14px',
     textAlign: 'center',
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 700,
     color: 'var(--text)',
     fontVariantNumeric: 'tabular-nums',
@@ -256,15 +306,19 @@ const layout = {
   statLabel: {
     fontSize: 11,
     color: 'var(--text-muted)',
-    marginTop: 4,
+    marginTop: 3,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     fontWeight: 500,
   },
-  main: {
-    minHeight: 400,
+  // Mobile layout
+  mobileStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
   },
-  timerLayout: {
+  // Desktop layout
+  desktopGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 320px',
     gap: 20,
@@ -278,11 +332,40 @@ const layout = {
     display: 'flex',
     justifyContent: 'center',
   },
-  sideCard: {
+  // Collapsible settings toggle button
+  settingsToggle: {
+    width: '100%',
     display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 12,
+    color: 'var(--text)',
+    cursor: 'pointer',
   },
+  settingsToggleLabel: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.6px',
+  },
+  chevron: (open) => ({
+    fontSize: 20,
+    color: 'var(--text-muted)',
+    transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+    transition: 'transform 0.2s ease',
+    lineHeight: 1,
+    display: 'inline-block',
+  }),
+  // Animate open/close
+  settingsBody: (open) => ({
+    overflow: 'hidden',
+    maxHeight: open ? '500px' : '0px',
+    transition: 'max-height 0.3s ease',
+  }),
   startedNote: {
     fontSize: 12,
     color: 'var(--text-muted)',
