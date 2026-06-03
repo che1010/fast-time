@@ -55,6 +55,16 @@ export default function App() {
 
   const stats = calcStats(store.sessions)
 
+  if (store.error) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, padding: '0 24px', textAlign: 'center' }}>
+        <p style={{ fontSize: 32 }}>⚠️</p>
+        <p style={{ color: 'var(--text)', fontWeight: 600, fontSize: 16 }}>Database Error</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, maxWidth: 340 }}>{store.error}</p>
+      </div>
+    )
+  }
+
   if (store.loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>

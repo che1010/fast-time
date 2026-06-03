@@ -26,7 +26,8 @@ function formatRemaining(ms) {
 }
 
 export function Timer({ fastStart, goalHours, onStart, onStop, onGoalReached }) {
-  const [now, setNow] = useState(0)
+  // eslint-disable-next-line react-hooks/purity
+  const [now, setNow] = useState(Date.now())
   const goalFiredRef = useRef(false)
 
   useEffect(() => {

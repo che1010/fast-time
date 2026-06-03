@@ -26,6 +26,7 @@ export function useFastStore() {
   const [fastStart, setFastStart] = useState(null)
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   // Listen to settings doc
   useEffect(() => {
@@ -42,6 +43,7 @@ export function useFastStore() {
       },
       (err) => {
         console.error('Firestore settings listener error:', err)
+        setError('Unable to connect to the database. Check your Firestore security rules.')
         setLoading(false)
       },
     )
@@ -56,41 +58,63 @@ export function useFastStore() {
     )
     const unsub = onSnapshot(q, (snap) => {
       setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }, (err) => {
+      console.error('Firestore sessions listener error:', err)
     })
     return unsub
   }, [deviceId])
 
   const setGoalHours = useCallback(async (hours) => {
-    await setDoc(doc(db, 'users', deviceId), { goalHours: hours }, { merge: true })
+    try {
+      await setDoc(doc(db, 'users', deviceId), { goalHours: hours }, { merge: true })
+    } catch (err) {
+      console.error('Failed to save goal hours:', err)
+      setError('Failed to save. Check your Firestore security rules.')
+    }
   }, [deviceId])
 
   const startFast = useCallback(async () => {
-    const start = new Date().toISOString()
-    await setDoc(doc(db, 'users', deviceId), { fastStart: start }, { merge: true })
+    try {
+      const start = new Date().toISOString()
+      await setDoc(doc(db, 'users', deviceId), { fastStart: start }, { merge: true })
+    } catch (err) {
+      console.error('Failed to start fast:', err)
+      setError('Failed to start fast. Check your Firestore security rules.')
+    }
   }, [deviceId])
 
   const stopFast = useCallback(async () => {
     if (!fastStart) return
-    const end = new Date().toISOString()
-    const durationMs = new Date(end) - new Date(fastStart)
-    const goalMs = goalHours * 3600 * 1000
-    const sessionId = crypto.randomUUID()
+    try {
+      const end = new Date().toISOString()
+      const durationMs = new Date(end) - new Date(fastStart)
+      const goalMs = goalHours * 3600 * 1000
+      const sessionId = crypto.randomUUID()
 
-    await Promise.all([
-      setDoc(doc(db, 'users', deviceId), { fastStart: null }, { merge: true }),
-      setDoc(doc(db, 'users', deviceId, 'sessions', sessionId), {
-        start: fastStart,
-        end,
-        goalHours,
-        goalMet: durationMs >= goalMs,
-        durationMs,
-        createdAt: serverTimestamp(),
-      }),
-    ])
+      await Promise.all([
+        setDoc(doc(db, 'users', deviceId), { fastStart: null }, { merge: true }),
+        setDoc(doc(db, 'users', deviceId, 'sessions', sessionId), {
+          start: fastStart,
+          end,
+          goalHours,
+          goalMet: durationMs >= goalMs,
+          durationMs,
+          createdAt: serverTimestamp(),
+        }),
+      ])
+    } catch (err) {
+      console.error('Failed to stop fast:', err)
+      setError('Failed to stop fast. Check your Firestore security rules.')
+    }
   }, [deviceId, fastStart, goalHours])
 
   const deleteSession = useCallback(async (id) => {
-    await deleteDoc(doc(db, 'users', deviceId, 'sessions', id))
+    try {
+      await deleteDoc(doc(db, 'users', deviceId, 'sessions', id))
+    } catch (err) {
+      console.error('Failed to delete session:', err)
+      setError('Failed to delete session. Check your Firestore security rules.')
+    }
   }, [deviceId])
 
   return {
@@ -98,6 +122,7 @@ export function useFastStore() {
     fastStart,
     sessions,
     loading,
+    error,
     setGoalHours,
     startFast,
     stopFast,
