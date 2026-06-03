@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const SIZE = 260
 const STROKE = 14
@@ -26,7 +26,7 @@ function formatRemaining(ms) {
 }
 
 export function Timer({ fastStart, goalHours, onStart, onStop, onGoalReached }) {
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(0)
   const goalFiredRef = useRef(false)
 
   useEffect(() => {

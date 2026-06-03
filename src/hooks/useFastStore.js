@@ -30,14 +30,21 @@ export function useFastStore() {
   // Listen to settings doc
   useEffect(() => {
     const ref = doc(db, 'users', deviceId)
-    const unsub = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data()
-        setGoalHoursState(data.goalHours ?? 16)
-        setFastStart(data.fastStart ?? null)
-      }
-      setLoading(false)
-    })
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data()
+          setGoalHoursState(data.goalHours ?? 16)
+          setFastStart(data.fastStart ?? null)
+        }
+        setLoading(false)
+      },
+      (err) => {
+        console.error('Firestore settings listener error:', err)
+        setLoading(false)
+      },
+    )
     return unsub
   }, [deviceId])
 

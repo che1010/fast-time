@@ -36,13 +36,8 @@ export default function App() {
   const store = useFastStore()
   const isMobile = useIsMobile()
   const [tab, setTab] = useState('Timer')
-  const [settingsOpen, setSettingsOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(() => !isMobile)
   const notifiedRef = useRef(false)
-
-  // Collapse settings by default on mobile
-  useEffect(() => {
-    setSettingsOpen(!isMobile)
-  }, [isMobile])
 
   useEffect(() => {
     requestNotifPermission()
